@@ -60,6 +60,7 @@ from synapse.metrics.background_process_metrics import run_as_background_process
 from synapse.module_api import ModuleApi
 from synapse.python_dependencies import check_requirements
 from synapse.replication.http import REPLICATION_PREFIX, ReplicationRestResource
+from synapse.replication.tcp.protocol import RedisFactory
 from synapse.replication.tcp.resource import ReplicationStreamProtocolFactory
 from synapse.rest import ClientRestResource
 from synapse.rest.admin import AdminRestResource
@@ -263,6 +264,10 @@ class SynapseHomeServer(HomeServer):
     def start_listening(self, listeners):
         config = self.get_config()
 
+        if config.redis_enabled:
+            factory = RedisFactory(self, self.get_replication_streamer())
+            self.get_reactor().connectTCP("redis", 6379, factory)
+
         for listener in listeners:
             if listener["type"] == "http":
                 self._listening_services.extend(self._listener_http(config, listener))
@@ -282,6 +287,7 @@ class SynapseHomeServer(HomeServer):
                 )
                 for s in services:
                     reactor.addSystemEventTrigger("before", "shutdown", s.stopListening)
+
             elif listener["type"] == "metrics":
                 if not self.get_config().enable_metrics:
                     logger.warning(
